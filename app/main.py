@@ -10,6 +10,10 @@ app = FastAPI()
 
 storage_service = get_storage_service()
 
+@app.get("/")
+async def health_check():
+    return {"status": "running"}
+
 
 @app.post("/generate", response_model=GenerateResponse)
 def generate_video_combinations(task_details: TaskPayload):
