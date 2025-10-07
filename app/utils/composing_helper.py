@@ -1,12 +1,13 @@
-import random
 import json
-import ffmpeg
-from itertools import product, chain
-from typing import List, Dict, Iterator
+import random
+from itertools import chain, product
+from typing import Dict, Iterator, List
 
+import ffmpeg
 from google.cloud.storage import Client
-from app.models import TaskPayload, VoiceItem
-from app.config import GCS_BUCKET_NAME
+
+from config import GCS_BUCKET_NAME, logger
+from models import TaskPayload, VoiceItem
 
 
 class Combination:
@@ -82,6 +83,7 @@ class MetadataComposer:
             probe = ffmpeg.probe(url)
             video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
             if video_stream is None:
+                logger.warning("No video stream found for URL: %s" % url)
                 return {"error": "No video stream found"}
             
             return {
@@ -89,15 +91,16 @@ class MetadataComposer:
                 "resolution": f"{video_stream.get('width', 0)}x{video_stream.get('height', 0)}"
             }
         except ffmpeg.Error as e:
+            logger.warning("FFmpeg error: %s \nURL: %s" % (e.stderr.decode('utf8'), url))
             return {"error": f"FFmpeg error: {e.stderr.decode('utf8')}"}
 
-    def upload_to_gcs(self, data: Dict, remote_path: str) -> None:
-        if not self.gcs_client:
-            raise ConnectionError("GCS client is not initialized.")
-        
+    def upload_to_gcs(self, data: Dict, remote_path: str) -> str:
         bucket = self.gcs_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(remote_path)
         
         json_data = json.dumps(data, indent=4)
         
         blob.upload_from_string(json_data, content_type='application/json')
+
+        logger.info("File ...%s successfully uploaded to GCS bucket" % remote_path)
+        return f"https://storage.cloud.google.com/{GCS_BUCKET_NAME}/{remote_path}"
