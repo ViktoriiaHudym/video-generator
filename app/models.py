@@ -1,5 +1,5 @@
 from typing import List, Dict
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 class VoiceItem(BaseModel):
     text: List[str]
@@ -7,7 +7,6 @@ class VoiceItem(BaseModel):
 
 class TaskPayload(BaseModel):
     task_name: str
-    video_blocks: Dict[str, List[HttpUrl]]
-    audio_blocks: Dict[str, List[HttpUrl]]
+    video_blocks: Dict[str, List[str]]
+    audio_blocks: Dict[str, List[str]]
     voice_blocks: Dict[str, List[VoiceItem]]
-    
