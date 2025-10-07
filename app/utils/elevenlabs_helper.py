@@ -1,6 +1,6 @@
 from elevenlabs.client import ElevenLabs
 
-from config import ELEVENLABS_API_KEY
+from app.config import ELEVENLABS_API_KEY
 
 
 def get_elevenlabs_client():

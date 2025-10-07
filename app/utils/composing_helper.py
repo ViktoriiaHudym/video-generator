@@ -6,8 +6,8 @@ from typing import Dict, Iterator, List
 import ffmpeg
 from google.cloud.storage import Client
 
-from config import GCS_BUCKET_NAME, logger
-from models import TaskPayload, VoiceItem
+from app.config import GCS_BUCKET_NAME, logger
+from app.models import TaskPayload, VoiceItem
 
 
 class Combination:

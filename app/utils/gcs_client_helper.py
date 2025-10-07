@@ -1,6 +1,6 @@
 from google.cloud import storage
 
-from config import GOOGLE_APPLICATION_CREDENTIALS_PATH, logger
+from app.config import GOOGLE_APPLICATION_CREDENTIALS_PATH, logger
 
 
 def get_gcs_client():
