@@ -9,7 +9,7 @@ def get_logger(name: str) -> logging.Logger:
         ch.setLevel(logging.INFO)
 
         formatter = logging.Formatter(
-            "%(asctime)s - %(module)s - %(name)s - %(levelname)s - %(message)s"
+            "%(asctime)s - %(module)s - %(levelname)s: %(message)s"
         )
         ch.setFormatter(formatter)
 
