@@ -1,38 +1,51 @@
-import json
 import random
 from itertools import chain, product
 from typing import Dict, Iterator, List
 
 import ffmpeg
-from google.cloud.storage import Client
+from google.cloud import storage
 
-from app.config import GCS_BUCKET_NAME, logger
+from app.config import get_logger
 from app.models import TaskPayload, VoiceItem
+
+logger = get_logger(__name__)
 
 
 class Combination:
+    """Represents a single combination of video, audio, and voice."""
     def __init__(self, video_blocks: List[str], audio_url: str, voice_item: VoiceItem):
         self.video_blocks = video_blocks
         self.audio_url = audio_url
         self.voice_item = voice_item
 
-
 class CombinationBuilder:
+    """
+    Generates unique combinations of video, audio, and voice assets.
+    """
     def __init__(self, payload: TaskPayload):
         self.payload = payload
 
-    def _get_all_video_combinations(self) -> Iterator[tuple]:
+    def _get_all_video_combinations(self) -> Iterator[tuple[str, ...]]:
         video_groups = self.payload.video_blocks.values()
         if not video_groups:
             return iter([])
         return product(*video_groups)
 
     def build_combinations(self) -> Iterator[Combination]:
+        """
+        Builds and yields unique combinations from the provided task payload.
+
+        Yields:
+            An iterator of Combination objects.
+
+        Raises:
+            ValueError: If audio or voice blocks are empty.
+        """
         all_audios = self._flatten_dict_values(self.payload.audio_blocks)
         all_voices = self._flatten_dict_values(self.payload.voice_blocks)
 
         if not all_audios or not all_voices:
-            raise ValueError("Audio blocks and voice blocks cannot be empty.")
+            raise ValueError("Audio and voice blocks cannot be empty.")
 
         for video_combo_tuple in self._get_all_video_combinations():
             random_audio = random.choice(all_audios)
@@ -40,21 +53,46 @@ class CombinationBuilder:
             yield Combination(
                 video_blocks=list(video_combo_tuple),
                 audio_url=random_audio,
-                voice_item=random_voice
+                voice_item=random_voice,
             )
-    
+
     @staticmethod
-    def _flatten_dict_values(dict_data: Dict) -> List:
-        if not dict_data:
+    def _flatten_dict_values(data: Dict[str, List]) -> List:
+        """Flattens a dictionary's list values into a single list."""
+        if not data:
             return []
-        return list(chain.from_iterable(dict_data.values()))
+        return list(chain.from_iterable(data.values()))
 
 
-class MetadataComposer:
-    def __init__(self, gcs_client: Client):
-        self.gcs_client = gcs_client
+class VideoCombinationsService:
+    def __init__(self, storage_service: storage):
+        self.storage_service = storage_service
 
-    def process_combination(self, combination: Combination) -> Dict:
+    def generate_and_upload_combinations(self, task_payload: TaskPayload, task_id: str) -> List[str]:
+        """
+        Generates combinations, processes metadata, and uploads to storage.
+
+        Args:
+            task_payload: The input data defining the task.
+            task_id: A unique identifier for the task.
+
+        Returns:
+            A list of GCS URLs for the generated metadata files.
+        """
+        builder = CombinationBuilder(task_payload)
+        combinations = builder.build_combinations()
+        gcs_urls = []
+
+        for i, combination in enumerate(combinations):
+            final_json = self._process_single_combination(combination)
+            remote_path = f"{task_id}/{i + 1}.json"
+            gcs_url = self.storage_service.upload_json(final_json, remote_path)
+            gcs_urls.append(gcs_url)
+
+        return gcs_urls
+
+    def _process_single_combination(self, combination: Combination) -> Dict:
+        """Processes a single combination to generate its final metadata JSON."""
         video_segments = []
         total_duration = 0.0
         
@@ -69,20 +107,24 @@ class MetadataComposer:
             if "duration" in metadata:
                 total_duration += metadata["duration"]
         
-        final_json = {
+        return {
             "total_duration_seconds": round(total_duration, 2),
             "background_audio_url": combination.audio_url,
             "selected_voice_block": combination.voice_item.model_dump(),
             "video_segments": video_segments
         }
-        return final_json
-    
+
     @staticmethod
     def get_video_metadata(url: str) -> Dict:
+        """
+        Probes a video URL to extract metadata like duration and resolution.
+        """
         try:
             probe = ffmpeg.probe(url)
-            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
-            if video_stream is None:
+            video_stream = next(
+                (s for s in probe["streams"] if s["codec_type"] == "video"), None
+            )
+            if not video_stream:
                 logger.warning("No video stream found for URL: %s" % url)
                 return {"error": "No video stream found"}
             
@@ -91,16 +133,7 @@ class MetadataComposer:
                 "resolution": f"{video_stream.get('width', 0)}x{video_stream.get('height', 0)}"
             }
         except ffmpeg.Error as e:
-            logger.warning("FFmpeg error: %s \nURL: %s" % (e.stderr.decode('utf8'), url))
-            return {"error": f"FFmpeg error: {e.stderr.decode('utf8')}"}
-
-    def upload_to_gcs(self, data: Dict, remote_path: str) -> str:
-        bucket = self.gcs_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(remote_path)
+            error_message = e.stderr.decode("utf-8", errors="ignore")
+            logger.error("FFmpeg error for URL %s: %s", url, error_message)
+            return {"error": f"FFmpeg error: {error_message}"}
         
-        json_data = json.dumps(data, indent=4)
-        
-        blob.upload_from_string(json_data, content_type='application/json')
-
-        logger.info("File ...%s successfully uploaded to GCS bucket" % remote_path)
-        return f"https://storage.cloud.google.com/{GCS_BUCKET_NAME}/{remote_path}"
