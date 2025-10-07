@@ -1,11 +1,11 @@
 from google.cloud import storage
 
-from app.config import GOOGLE_APPLICATION_CREDENTIALS_PATH, logger
+from app.config import logger
 
 
 def get_gcs_client():
     try:
-        client = storage.Client.from_service_account_json(GOOGLE_APPLICATION_CREDENTIALS_PATH)
+        client = storage.Client.from_service_account_json()
         logger.info('GCS client successfully connected')
     
     except Exception as e:
