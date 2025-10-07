@@ -5,7 +5,7 @@ from app.config import logger
 
 def get_gcs_client():
     try:
-        client = storage.Client.from_service_account_json()
+        client = storage.Client()
         logger.info('GCS client successfully connected')
     
     except Exception as e:
