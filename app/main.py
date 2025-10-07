@@ -2,13 +2,18 @@ import uuid
 
 from fastapi import FastAPI, HTTPException
 
-from models import TaskPayload
-from utils.composing_helper import CombinationBuilder, MetadataComposer
-from utils.gcs_client_helper import get_gcs_client
+from app.models import TaskPayload
+from app.utils.composing_helper import CombinationBuilder, MetadataComposer
+from app.utils.gcs_client_helper import get_gcs_client
 
 app = FastAPI()
 
 gcs_client = get_gcs_client()
+
+
+@app.get("/")
+def read_root():
+    return {"message": "Video Generator App. Please, got to /docs to see the availaible endpoints."}
 
 
 @app.post("/generate")

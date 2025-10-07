@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
-from logger import get_logger
+from app.logger import get_logger
 
 logger = get_logger(name='main_logger')
 
