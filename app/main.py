@@ -1,44 +1,53 @@
 import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 
-from app.models import TaskPayload
-from app.utils.composing_helper import CombinationBuilder, MetadataComposer
-from app.utils.gcs_client_helper import get_gcs_client
+from app.models import GenerateResponse, TaskPayload
+from app.utils.composing_helper import VideoCombinationsService
+from app.utils.gcs_client_helper import get_storage_service
 
 app = FastAPI()
 
-gcs_client = get_gcs_client()
+storage_service = get_storage_service()
+
+@app.get("/")
+async def health_check():
+    return {"status": "running"}
 
 
-@app.post("/generate")
-async def generate_video_combinations(task_details: TaskPayload):
-    if not get_gcs_client:
-        raise HTTPException(status_code=500, detail='GCS client is not availiable')
-
+@app.post("/generate", response_model=GenerateResponse)
+def generate_video_combinations(task_details: TaskPayload):
+    """
+    Endpoint to generate video combinations based on a task payload.
+    """
     task_id = str(uuid.uuid4())
 
-    composer = MetadataComposer(gcs_client)
-    builder = CombinationBuilder(task_details)
-
-    gcs_urls = []
-
     try:
-        combinations = builder.build_combinations()
+        video_service = VideoCombinationsService(storage_service)
         
-        for i, combination in enumerate(combinations):    
-            video_metadata = composer.process_combination(combination)
-            
-            gcs_url = composer.upload_to_gcs(video_metadata, remote_path=f'{task_id}/{i+1}.json')
-            gcs_urls.append(gcs_url)
-    
+        gcs_urls = video_service.generate_and_upload_combinations(
+            task_payload=task_details, task_id=task_id
+        )
+
+        return GenerateResponse(
+            task_id=task_id,
+            task_name=task_details.task_name,
+            message="Combinations for the task generated successfully.",
+            gcs_urls=gcs_urls,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except ConnectionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"External service error: {e}",
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'An unexpected error occured: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {e}",
+        )
     
-    return {
-        'task_id': task_id,
-        'task_name': task_details.task_name,
-        'message': f'Combinations for the task generated successfully. See them in GCS',
-        'gcs_urls': gcs_urls,
-        'status': 'success'
-    }
