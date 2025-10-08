@@ -136,7 +136,7 @@ You can easily test the deployed endpoint using the interactive FastAPI document
 
 1.  **Open the API Documentation**
     Navigate to the following URL in your browser:
-    [https://vgimage-747936449621.europe-west4.run.app/docs](https://www.google.com/search?q=https://vgimage-747936449621.europe-west4.run.app/docs)
+    [https://vgimage-747936449621.europe-west4.run.app/docs](https://vgimage-747936449621.europe-west4.run.app/docs)
 
 2.  **Interact with the Endpoint**
 
