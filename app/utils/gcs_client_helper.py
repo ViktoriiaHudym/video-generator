@@ -14,8 +14,8 @@ class StorageService:
     A service for interacting with Google Cloud Storage.
     """
 
-    def __init__(self, bucket_name: str, client: storage.Client | None = None):
-        self.client = client or storage.Client()
+    def __init__(self, bucket_name: str):
+        self.client = storage.Client()
         self.bucket_name = bucket_name
         self.bucket = None
 
